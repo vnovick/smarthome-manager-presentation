@@ -1,0 +1,420 @@
+import React from 'react'
+import { AppRegistry } from 'react-native';
+import { RootComponent } from './root-component'
+import ApolloClient from "apollo-boost";
+import { ApolloProvider } from "react-apollo";
+import { Provider as PaperProvider } from 'react-native-paper';
+
+const client = new ApolloClient({
+  uri: "http://10.0.0.30:4000"
+});
+
+AppRegistry.registerComponent('lightController', () => () => (
+  <ApolloProvider client={client}>
+    <PaperProvider>
+      <RootComponent />
+    </PaperProvider>
+  </ApolloProvider>
+));
+
+
+import React, { Fragment } from 'react';
+import gql from "graphql-tag";
+import { Query, Mutation } from "react-apollo";
+import { View,ScrollView, Text, StyleSheet } from 'react-native'
+import {
+  Button,
+  Switch,
+  Card,
+  CardActions,
+  CardContent,
+  CardCover,
+  Title,
+  Paragraph
+} from 'react-native-paper';
+
+export class HueComponent extends React.Component {
+  render(){
+    return (
+      <ScrollView>
+        <Query
+          query={gql`
+            {
+              getHues
+            }
+          `}
+        >
+          {({ loading, error, data: { getHues } }) => {
+            if(loading) return <Text>Loading...</Text>
+            if(error) return <Text>Error :(</Text>
+            return (
+              <Fragment>
+                { 
+                  Object
+                  .keys(getHues).map(groupType => (
+                    <Card>
+                      <CardContent>
+                        <Title>Philips Hue{ groupType } group</Title>
+                        { Object
+                            .values(getHues[groupType])
+                            .map((device, index) => {
+                            if(groupType !== "lights") return (
+                              <Paragraph 
+                                key={`d${index}`}>
+                                { JSON
+                                  .stringify(
+                                    device, null, 2
+                                  ) 
+                                }
+                              </Paragraph>
+                            )
+                            return (
+                              <BulbController 
+                                data={device}
+                              />
+                            )
+                          })
+                        }
+                      </CardContent>
+                    </Card>
+                  ))
+                }
+              </Fragment>
+            )
+          }}
+        </Query>
+      </ScrollView>
+    )
+  }
+}
+
+class BulbController extends React.Component {
+  render() {
+    return (
+      <Card>
+        <CardContent style={this.props.data.state.reachable ? style.reachable : style.disabled}>
+          <Title>{this.props.data.name}</Title>
+          <CardActions>
+            <ActiveToggleButton { ...this.props.data } />
+          </CardActions>
+        </CardContent>
+      </Card>
+    )
+  }
+}
+
+
+class ActiveToggleButton extends React.Component {
+
+  componentDidMount(){
+    this.setState({
+      isSwitchOn: this.props.state.on
+    })
+  }
+  
+  state = {
+    isSwitchOn: false,
+  }
+
+  render(){
+    const { isSwitchOn } = this.state
+    return (
+      <Mutation mutation={gql`
+        mutation toggle($id: Int!, $state: HueState){
+          toggleHueState(id: $id, state: $state)
+        }
+      `}>
+        {(toggle, ) => (
+          <Switch
+              value={isSwitchOn}
+              onValueChange={() => { 
+                this.setState({ 
+                  isSwitchOn: !isSwitchOn 
+                }); 
+                  toggle({ 
+                    variables: { 
+                      id: 5, 
+                      state: { 
+                        on: !isSwitchOn 
+                      }
+                    } 
+                  })
+                }
+              }
+            />
+          )}
+      </Mutation>
+    )
+  }
+}
+
+import * as React from 'react';
+import gql from "graphql-tag";
+import { Mutation } from "react-apollo";
+import { View, Text } from 'react-native'
+import { Switch } from 'react-native-paper'
+import {
+  Card,
+  CardActions,
+  CardContent,
+  CardCover,
+  Title,
+  Button,
+  Paragraph
+} from 'react-native-paper';
+
+export class WemoComponent extends React.Component {
+
+  render(){
+    return (
+      <View style={{flex:1 , justifyContent: 'center' }}>
+        <Mutation
+          mutation={gql`
+              mutation {
+                wemoConnect
+              }
+          `}
+        >
+          {(connect) => {
+            return (
+              <WemoSwitchView 
+                connect={connect} 
+              />
+          }}
+        </Mutation>
+      </View>
+    )
+  }
+}
+
+class WemoSwitchView extends React.Component {
+
+  state = {
+    isSwitchOn: false,
+  }
+
+  componentDidMount(){
+    this.props.connect()
+  }
+
+  render(){
+    const { isSwitchOn } = this.state;
+    return (
+      <Mutation mutation={
+        gql`
+          mutation setState($state: String){
+            setBinaryState(state: $state)
+          }
+        `
+      }>
+        {(setBinaryState, { }) => {
+          return (
+            <Card>
+              <CardContent>
+                <Title>Wemo Mini Plug</Title>
+                <Paragraph>
+                The Wemo Mini Smart Plug lets you control your electronic devices right from your phone or tablet. The Smart Plug uses your existing home Wi-Fi network to provide wireless control of lamps, heaters, fans, and more--with no subscription or hub required. Simply plug the Wemo Mini Smart Plug into an electrical outlet, plug a device into the Smart Plug, and control your device using the free Wemo app. Whether you’re unwinding on the couch or vacationing in the Caribbean, you’ll be able to remotely control your lights and appliances from anywhere in the world.
+                </Paragraph>
+              </CardContent>
+              <CardCover source={{ uri: 'https://i.ytimg.com/vi/r6_jNexTbBs/maxresdefault.jpg' }} />
+              <CardActions style={{alignSelf: 'flex-end'}}>
+                <Switch
+                  value={isSwitchOn}
+                  onValueChange={() => { 
+                      this.setState({ isSwitchOn: !isSwitchOn }); 
+                      setState({ 
+                        variables: { 
+                          state: `${+!isSwitchOn}`
+                        } 
+                      })
+                    }
+                  }
+                />
+                <Button>Turn {this.state.isSwitchOn ? 'off': 'on'}</Button>
+              </CardActions>
+            </Card>
+          )
+        }}
+      </Mutation>
+    )
+  }
+}
+
+import React, { Fragment } from 'react';
+import gql from "graphql-tag";
+import { Query, Mutation } from "react-apollo";
+import { ScrollView, Text, ActivityIndicator, View, ImageBackground } from 'react-native'
+import { ColorPicker } from 'react-native-color-picker'
+import { rgbToHex, hexToRgb } from '../../lib/utils'
+import {
+  Button,
+  Switch,
+  Card,
+  CardActions,
+  CardContent,
+  CardCover,
+  Title,
+  Paragraph
+} from 'react-native-paper';
+
+
+export class MagicHomeComponent extends React.Component {
+  render(){
+    return (
+      <View style={{flex: 1 }}>
+        <Query
+          query={gql`
+            {
+              getMagicHomeState
+            }
+          `}  
+        >
+          {({ loading, error, data: { getMagicHomeState: state } }) => {
+            if(loading) return <ActivityIndicator/>
+            if(error) return <Text>Error :(</Text>
+            return (
+              <Fragment>
+                <Card>
+                  <CardContent>
+                    <Title>Magic Home Led strip</Title>
+                    <Paragraph style={{fontSize: 22, lineHeight: 22}}>
+                      { JSON.stringify(state, 2)}
+                    </Paragraph>
+                  </CardContent>
+                  <CardActions>
+                  </CardActions>
+                </Card>
+                <Card>
+                  <CardContent>
+                    <Title>Control colors</Title>
+                    <ControlledCollorPicker 
+                      color={state.color}
+                    />
+                  </CardContent>
+                  <CardActions style={{justifyContent: 'space-between', paddingVertical: 20 }}>
+                    <BasicController on={state.on}/>
+                    <PartyButtonComponent />
+                  </CardActions>
+                </Card>
+              </Fragment>
+            )
+          }}
+        </Query>
+      </View>
+    )
+  }
+}
+
+
+
+
+
+class BasicController extends React.Component {
+  
+  componentDidMount(){
+    this.setState({
+      isSwitchOn: this.props.on
+    })
+  }
+  
+  state = {
+    isSwitchOn: false,
+  }
+
+  render(){
+    const { isSwitchOn } = this.state
+    return (
+      <Mutation mutation={gql`
+      mutation toggleMagicHomeState($state: Boolean){
+          toggleMagicHomeState(state: $state)
+        }
+      `}>
+        {(toggle, ) => (
+          <Switch
+              value={isSwitchOn}
+              onValueChange={() => { 
+                this.setState({ isSwitchOn: !isSwitchOn }); 
+                  toggle({ variables: { state: !isSwitchOn} })
+                }
+              }
+            />
+          )}
+      </Mutation>
+    )
+  }
+}
+
+
+class ControlledCollorPicker extends React.Component {
+                                    
+  state = {
+    color: false,
+    brightness: 0
+  }
+  componentDidMount() {
+    const { red, green, blue } = this.props.color
+    this.setState({
+      color: `#${rgbToHex(red)}${rgbToHex(green)}${rgbToHex(blue)}`
+    })
+    console.log(`${rgbToHex(red)}${rgbToHex(green)}${rgbToHex(blue)}`)
+  }
+
+  render(){
+    return (
+      this.state.color && (
+        <Mutation mutation={
+          gql`
+            mutation setColorWithBrightness($red: Int, $green: Int, $blue: Int, $brightness: Int){
+              setMagicHomeColorWithBrightness(red: $red, green: $green, blue: $blue, brightness: $brightness)
+            }
+          `
+        }>
+          {(setColorWithBrightness) => (
+            <ImageBackground source={{uri: "https://images-eu.ssl-images-amazon.com/images/I/5180CX5dimL._SL500_AC_SS350_.jpg"}} style={{width: '100%'}}>
+              <View style={{backgroundColor: 'rgba(0,0,0,.5)'}}>
+                <ColorPicker 
+                  defaultColor={this.state.color}
+                  style={{
+                    height: 300,
+                    paddingLeft: 15,
+                    paddingRight: 15,
+                    borderRadius: 5
+                  }}
+                  onColorSelected = {(color) => {
+                    this.setState({
+                      color
+                    })
+                    console.log( {
+                      ...hexToRgb(color),
+                      brightness: 100
+                    })
+                    setColorWithBrightness({ variables: {
+                      ...hexToRgb(color),
+                      brightness: 100
+                    }})
+                  }}
+                />
+              </View>
+            </ImageBackground>
+          )}
+        </Mutation>
+      )
+    )
+  }
+}
+
+const PartyButtonComponent = () => (
+  <Mutation mutation={gql`
+    mutation {
+      magicHomeItsPartyTime
+    }
+  `}>
+    {(party) => (
+      <Button icon="cake" raised onPress={() => {
+        party()
+      }}>
+        Let's Party
+      </Button>
+    )}
+  </Mutation>
+)
